@@ -1,5 +1,8 @@
 import datetime
 import sqlite3
+import requests
+import matplotlib.pyplot as plt
+
 
 #Crear conexion con base de datos
 conn = sqlite3.connect('database.bd')
@@ -12,35 +15,35 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS ventas (
     ANIO INTEGER,
     monto REAL,
     tipo_moneda TEXT,
-    fecha_venta TEXT,
+    tipo_cambio REAL,
     Primary KEY (cliente, mes, anio)
 )''')
 conn.commit()
 
-def obtener_tipo_cambio(fecha):
-    #Implementar logica para obtener en el tipo de cambio segun la fecha en mi base de datos real
-    return 20.0
-def crear_instancia(cliente,mes,anio,monto,tipo_moneda,fecha_venta=None):
-    #Verificar si ya existe una instancia con el mismo cliente, mes y año 
-    #ESTUDIAR SINGLETON RECORDAR!!!
-    cursor.execute("SELECT * FROM ventas WHERE cliente = ? AND mes = ? AND anio = ?",(cliente, mes, anio))
+
+def crear_instancia(cliente, mes, anio, monto, tipo_moneda, tipo_cambio=None):
+    # Verificar si ya existe una instancia con el mismo cliente, mes y año
+    cursor.execute("SELECT * FROM ventas WHERE cliente = ? AND mes = ? AND anio = ?", (cliente, mes, anio))
     row = cursor.fetchone()
-    
+
+    # Si row da verdadero, o sea que existe una instancia con esos datos
     if row:
-        #Actualizar el monto de ls instancia existente
-        nuevo_monto=row[3]+monto
-        cursor.execute("UPDATE ventas SET monto = ? WHERE cliente = ? AND mes = ? AND anio = ?",  (nuevo_monto, cliente, mes, anio))
-        conn.commit()
-        print(f"Se actualizo el monto de la instancia existente: {cliente} - {mes}/{anio}")
-    else:
-        #Obtener el tipo de cambio si se selecciono dolar
+        # Actualizar el monto de la instancia existente
         if tipo_moneda == "Dolar":
-            tipo_cambio=obtener_tipo_cambio(fecha_venta)
-            monto = monto*tipo_cambio
-        #Insertar nueva instancia
-        cursor.execute("INSERT INTO ventas VALUES (?, ?, ?, ?, ?, ?)", (cliente, mes, anio, monto, tipo_moneda, fecha_venta))
+            monto = monto * tipo_cambio
+        nuevo_monto = row[3] + monto
+        cursor.execute("UPDATE ventas SET monto = ? WHERE cliente = ? AND mes = ? AND anio = ?", (nuevo_monto, cliente, mes, anio))
+        conn.commit()
+        print(f"Se actualizó el monto de la instancia existente: {cliente} - {mes}/{anio}")
+    else:
+        # Obtener el tipo de cambio si se seleccionó Dólar
+        if tipo_moneda == "Dolar":
+            monto = monto * tipo_cambio
+        # Insertar nueva instancia
+        cursor.execute("INSERT INTO ventas VALUES (?, ?, ?, ?, ?, ?)", (cliente, mes, anio, monto, tipo_moneda, tipo_cambio))
         conn.commit()
         print("Se creó una nueva instancia.")
+
 
 def leer_datos():
     cliente = input("Nombre del cliente: ")
@@ -50,19 +53,19 @@ def leer_datos():
     tipo_moneda=input("Tipo de moneda (Dolar o MXN): ")
     
     if tipo_moneda=="Dolar":
-        fecha_venta=input("Fecha de la venta (YYYY-MM-DD):")
+        tipo_cambio=float(input("Introduce el tipo de cambio de ese dia: "))
     else:
-        fecha_venta=None
-    crear_instancia(cliente, mes, anio, monto, tipo_moneda, fecha_venta)
+        tipo_cambio=None
+    crear_instancia(cliente, mes, anio, monto, tipo_moneda, tipo_cambio)
 
 def ver_info():
-    cursor.execute("SELECT * FROM ventas")
+    cursor.execute("SELECT cliente, mes, anio, monto FROM ventas")
     rows = cursor.fetchall()
     if len(rows) > 0:
         print("Informacion de las ventas registradas")
         for row in rows:
-            cliente, mes, anio, monto, tipo_moneda, fecha_venta = row
-            print(f"Cliente: {cliente} | Mes: {mes} | Año: {anio} | Monto: {monto} | Moneda: {tipo_moneda} | Fecha: {fecha_venta}")  
+            cliente, mes, anio, monto = row
+            print(f"Cliente: {cliente} | Mes: {mes} | Año: {anio} | Monto: {monto} ")  
     else:
             print("No hay informacion registrada")
 
