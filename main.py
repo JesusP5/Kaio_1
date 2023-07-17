@@ -1,6 +1,4 @@
-import datetime
 import sqlite3
-import requests
 import matplotlib.pyplot as plt
 
 
@@ -15,34 +13,15 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS ventas (
     ANIO INTEGER,
     monto REAL,
     tipo_moneda TEXT,
-    tipo_cambio REAL,
-    Primary KEY (cliente, mes, anio)
+    tipo_cambio REAL
 )''')
 conn.commit()
 
 
 def crear_instancia(cliente, mes, anio, monto, tipo_moneda, tipo_cambio=None):
-    # Verificar si ya existe una instancia con el mismo cliente, mes y año
-    cursor.execute("SELECT * FROM ventas WHERE cliente = ? AND mes = ? AND anio = ?", (cliente, mes, anio))
-    row = cursor.fetchone()
-
-    # Si row da verdadero, o sea que existe una instancia con esos datos
-    if row:
-        # Actualizar el monto de la instancia existente
-        if tipo_moneda == "Dolar":
-            monto = monto * tipo_cambio
-        nuevo_monto = row[3] + monto
-        cursor.execute("UPDATE ventas SET monto = ? WHERE cliente = ? AND mes = ? AND anio = ?", (nuevo_monto, cliente, mes, anio))
-        conn.commit()
-        print(f"Se actualizó el monto de la instancia existente: {cliente} - {mes}/{anio}")
-    else:
-        # Obtener el tipo de cambio si se seleccionó Dólar
-        if tipo_moneda == "Dolar":
-            monto = monto * tipo_cambio
-        # Insertar nueva instancia
-        cursor.execute("INSERT INTO ventas VALUES (?, ?, ?, ?, ?, ?)", (cliente, mes, anio, monto, tipo_moneda, tipo_cambio))
-        conn.commit()
-        print("Se creó una nueva instancia.")
+    cursor.execute("INSERT INTO ventas VALUES (?, ?, ?, ?, ?, ?)", (cliente, mes, anio, monto, tipo_moneda, tipo_cambio))
+    conn.commit()
+    print("Se creó una nueva instancia.")
 
 
 def leer_datos():
@@ -54,12 +33,13 @@ def leer_datos():
     
     if tipo_moneda=="Dolar":
         tipo_cambio=float(input("Introduce el tipo de cambio de ese dia: "))
+        monto=tipo_cambio*monto
     else:
         tipo_cambio=None
     crear_instancia(cliente, mes, anio, monto, tipo_moneda, tipo_cambio)
 
 def ver_info():
-    cursor.execute("SELECT cliente, mes, anio, monto FROM ventas")
+    cursor.execute("SELECT cliente, mes, anio, SUM(monto) FROM ventas GROUP BY cliente, mes, anio")
     rows = cursor.fetchall()
     if len(rows) > 0:
         print("Informacion de las ventas registradas")
@@ -73,13 +53,18 @@ def eliminar_info():
     cliente = input("Nombre del cliente registrado: ")
     mes = int(input("Introduce el mes: "))
     anio = int(input("Introudece el anio: "))
-    cursor.execute("SELECT * FROM ventas WHERE cliente = ? AND mes = ? AND anio = ?",(cliente, mes, anio))
+    monto = float(input("Introduce el monto:"))
+    tipo_cambio =  float(input("Si fue en dolares introduce el tipo de cambio, si no ingresa 1:"))
+    monto = monto * tipo_cambio
+  
+    cursor.execute("SELECT * FROM ventas WHERE  cliente = ? AND mes = ? AND anio = ? AND monto = ?",  (cliente, mes, anio, monto))
     row = cursor.fetchone()
     if row:
-        cursor.execute("DELETE FROM ventas WHERE  cliente = ? AND mes = ? AND anio = ?",  (cliente, mes, anio))
+        cursor.execute("DELETE FROM ventas WHERE  cliente = ? AND mes = ? AND anio = ? AND monto = ?",  (cliente, mes, anio, monto))
         conn.commit()
+        print("Informacion borrada")
     else:
-        print("No existe un cliente con esos datos.")
+        print("No existe una instancia con la informacion ingresada, verificar su informacion")
 def main():
     while True:
         print("\n --- Registro de Ventas ---")
