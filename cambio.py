@@ -9,7 +9,7 @@ conn = sqlite3.connect('indicadores.bd')
 cursor = conn.cursor()
 
 # Crear la tabla si no existe
-cursor.execute(''' CREATE TABLE IF NOT EXISTS pruebaventas (
+cursor.execute(''' CREATE TABLE IF NOT EXISTS sales (
     cliente TEXT,
     mes INTEGER, 
     anio INTEGER,
@@ -18,29 +18,34 @@ cursor.execute(''' CREATE TABLE IF NOT EXISTS pruebaventas (
     tipo_cambio REAL
 )''')
 conn.commit()
-
+    
+# Establecer el formato de dinero con dos decimales
+pd.options.display.float_format = '${:,.2f}'.format
+#Esta funcion permite ver la graficas en comparacion del añop 2022 y 2023
 def ver_graficas_anio():
     # Consulta SQL para obtener los montos de ventas por mes y año
-    query = "SELECT anio, mes, SUM(monto) as monto_total FROM pruebaventas GROUP BY anio, mes"
+    query = "SELECT anio, mes, SUM(monto) as monto_total FROM sales GROUP BY anio, mes ORDER BY mes"
 
-    # Leer los datos en un DataFrame de Pandas
-    df = pd.read_sql_query(query, conn)
+    # Ejecutar la consulta y obtener los resultados
+    cursor.execute(query)
+    rows = cursor.fetchall()
 
-    # Crear una columna en el DataFrame que combine el mes y el año
-    df['Mes_Año'] = df['mes'].astype(str) + '/' + df['anio'].astype(str)
+    # Crear listas para almacenar los datos del gráfico
+    meses_anio = []
+    montos_anio = []
 
     # Filtrar los datos para incluir solo los años 2022 y 2023
-    df = df[(df['anio'] == 2022) | (df['anio'] == 2023)]
-
-    # Ordenar los datos por la columna "Mes_Año"
-    df = df.sort_values('Mes_Año')
+    for anio, mes, monto in rows:
+        if anio in (2022, 2023):
+            meses_anio.append(f"{mes}/{anio}")
+            montos_anio.append(monto)
 
     # Crear una gráfica de barras para comparar los montos de ventas por mes y año
     plt.figure(figsize=(10, 6))
 
     # Ajustar el ancho de las barras para que ocupen menos espacio
     width = 0.35
-    plt.bar(df['Mes_Año'], df['monto_total'], width=width)
+    plt.bar(meses_anio, montos_anio, width=width)
 
     plt.xlabel('Mes/Año')
     plt.ylabel('Monto de Ventas')
@@ -48,17 +53,18 @@ def ver_graficas_anio():
     plt.xticks(rotation=45, ha='right')
 
     # Ajustar la ubicación de las etiquetas del eje X
-    xticks_pos = [i + width / 2 for i in range(len(df['Mes_Año']))]
-    plt.xticks(xticks_pos, df['Mes_Año'])
+    xticks_pos = [i + width / 2 for i in range(len(meses_anio))]
+    plt.xticks(xticks_pos, meses_anio)
 
     plt.tight_layout()
 
     # Mostrar la gráfica sin bloquear la ejecución del programa
     plt.show(block=False)
-def ver_graficas_cliente():
-    cursor.execute("SELECT cliente, anio, SUM(monto) FROM pruebaventas GROUP BY cliente, anio ORDER BY SUM(monto) DESC")
-    rows = cursor.fetchall()
 
+#Esta funcion permite ver la grafica ordenada por cliente ordenado de forma descenciente
+def ver_graficas_cliente():
+    cursor.execute("SELECT cliente, anio, SUM(monto) FROM sales GROUP BY cliente, anio ORDER BY SUM(monto) DESC")
+    rows = cursor.fetchall()
     clientes = []
     montos = []
     for row in rows:
@@ -77,52 +83,96 @@ def ver_graficas_cliente():
 
     # Mostrar la gráfica sin bloquear la ejecución del programa
     plt.show(block=False)
-def crear_instancia(cliente, mes, anio, monto, tipo_moneda, tipo_cambio=None):
-    cursor.execute("INSERT INTO pruebaventas VALUES (?, ?, ?, ?, ?, ?)", (cliente, mes, anio, monto, tipo_moneda, tipo_cambio))
+def crear_instancia(cliente, mes, anio, monto, tipo_moneda, tipo_cambio):
+   
+    #Si todos los datos son valido entonces ingresar la informacion
+    cursor.execute("INSERT INTO sales VALUES (?, ?, ?, ?, ?, ?)", (cliente, mes, anio, monto, tipo_moneda, tipo_cambio))
     conn.commit()
     sg.popup('Se ha creado la instancia correctamente')
+    
 def eliminar_info():
     
     layout = [
-       
-        [sg.Text("Nombre del cliente registrado:")],
-        [sg.Input(key='-CLIENTE-', size=(20, 1))],
-        [sg.Text("Mes:")],
-        [sg.Input(key='-MES-', size=(20, 1))],
-        [sg.Text("Año:")],
-        [sg.Input(key='-ANIO-', size=(20, 1))],
-        [sg.Text("Monto")],
-        [sg.Input(key='-MONTO-', size=(20, 1))],
-        [sg.Text('Introduce el tipo de cambio que ingresaste si fue en MXN introduce un 1', size=(20, 2))],
-        [sg.Input(key='-TIPO_CAMBIO-', size=(20, 1))],
-        [sg.Button('Eliminar', size=(10, 1))]
+        [
+     sg.Column([
+                [sg.Text("Nombre del cliente registrado:")],
+                [sg.Input(key='-CLIENTE-', size=(20, 1))],
+                [sg.Text("Mes:")],
+                [sg.Input(key='-MES-', size=(20, 1))],
+                [sg.Text("Año:")],
+                [sg.Input(key='-ANIO-', size=(20, 1))],
+                [sg.Text("Monto")],
+                [sg.Input(key='-MONTO-', size=(20, 1))],
+                [sg.Text('Introduce el tipo de cambio que ingresaste si fue en MXN introduce un 1', size=(20, 2))],
+                [sg.Input(key='-TIPO_CAMBIO-', size=(20, 1))],
+                [sg.Button('Eliminar', size=(10, 1))]
+                ]),
+                sg.VSeparator(),
+                sg.Column([
+                    [sg.Input(key = 'Buscar', enable_events=True, size=(30, 1)), sg.Button('Busqueda')],
+                    [sg.Table(values=[], headings=['Cliente', 'Mes', 'Año', 'Monto', 'Tipo Cambio'],
+                        display_row_numbers=False,
+                        auto_size_columns=False,
+                        num_rows=20,
+                        col_widths=[15, 5, 5, 20],
+                        key='-TABLE-')],
+                    [sg.Button('Actualizar', size=(10, 1))],
+                ])
+        ]
     ]
-
+    
     window = sg.Window('Eliminar información', layout)
 
     while True:
+         # Update the table with the latest data after each event
+        cursor.execute("SELECT cliente, mes, anio, monto/tipo_cambio, tipo_cambio FROM sales GROUP BY cliente, mes, anio ORDER BY anio DESC, mes DESC")
+        rows = cursor.fetchall()
+
         event, values = window.read()
 
         if event == sg.WINDOW_CLOSED:
             break
+        elif event == 'Eliminar':
+            cliente = values['-CLIENTE-']
+            mes = int(values['-MES-'])
+            anio = int(values['-ANIO-'])
+            monto = float(values['-MONTO-'])
+            tipo_cambio = float(values['-TIPO_CAMBIO-'])
+            monto=monto*tipo_cambio
+            
+            cursor.execute("SELECT * FROM sales WHERE cliente = ? AND mes = ? AND anio = ? AND monto = ?", (cliente, mes, anio, monto))
+            row = cursor.fetchone()
 
-        cliente = values['-CLIENTE-']
-        mes = int(values['-MES-'])
-        anio = int(values['-ANIO-'])
-        monto = float(values['-MONTO-'])
-        tipo_cambio = float(values['-TIPO_CAMBIO-'])
-        monto=monto*tipo_cambio
+            if row:
+                cursor.execute("DELETE FROM sales WHERE  cliente = ? AND mes = ? AND anio = ? AND monto = ?", (cliente, mes, anio, monto))
+                conn.commit()
+                sg.popup("Se eliminó la información del cliente.")
+            else:
+                sg.popup("No existe un cliente con esos datos.")
+        elif event == 'Actualizar':
+            
+            cursor.execute("SELECT cliente, mes, anio, monto/tipo_cambio, tipo_cambio FROM sales GROUP BY cliente, mes, anio ORDER BY anio DESC, mes DESC")
+            rows = cursor.fetchall()
+           
+            window['-TABLE-'].update(values=rows)
+        # Evento para capturar el texto ingresado en el input 'Buscar'
+        elif event == 'Busqueda':
+            texto_buscar = values['Buscar'].strip().lower()  # Obtener el texto y eliminar espacios y convertir a minúsculas
 
-        cursor.execute("SELECT * FROM pruebaventas WHERE cliente = ? AND mes = ? AND anio = ? AND monto = ?", (cliente, mes, anio, monto))
-        row = cursor.fetchone()
+            # Obtener todos los datos de la tabla
+            cursor.execute("SELECT cliente, mes, anio, monto/tipo_cambio, tipo_cambio FROM sales GROUP BY cliente, mes, anio ORDER BY anio DESC, mes DESC")
+            rows = cursor.fetchall()
 
-        if row:
-            cursor.execute("DELETE FROM pruebaventas WHERE  cliente = ? AND mes = ? AND anio = ? AND monto = ?", (cliente, mes, anio, monto))
-            conn.commit()
-            print("Se eliminó la información del cliente.")
-        else:
-            print("No existe un cliente con esos datos.")
+            # Filtrar los datos según el texto ingresado en 'Buscar'
+            rows_filtrados = [row for row in rows if texto_buscar in str(row).lower()]
+
+            # Convertir los montos a formato de dinero con dos decimales
+            rows_formatted = [(cliente, mes, anio, f"${monto:.2f}", tipo_cambio) for cliente, mes, anio, monto, tipo_cambio in rows_filtrados]
+
+            window['-TABLE-'].update(values=rows_formatted)
+   
     window.close()
+
 def layout_principal():
     meses = [1,2,3,4,5,6,7,8,9,10,11,12]
     divisas = ['Dolar', 'MXN']
@@ -130,7 +180,7 @@ def layout_principal():
     layout = [
         [          
             sg.Column([
-                [sg.Image(filename=str(Path('C:/Users/jesus/OneDrive/Documentos/Proyectos propios/Kaio_1/CBH-Logo.png')), expand_x=True, expand_y=True )],
+                [sg.Image(filename=str(Path('C:/Users/jesus/OneDrive/Documentos/Proyectos_propios/Kaio_1/CBH-Logo.png')), expand_x=True, expand_y=True )],
                 [sg.Text("Nombre del cliente:")],
                 [sg.Input(key='-CLIENTE-')],
                 [sg.Text("Mes de las ventas:")],
@@ -148,10 +198,11 @@ def layout_principal():
             sg.VSeparator(),
             sg.Column([
                 [sg.Text("Informacion de las ventas", font=('Arial', 16), )],
+                [sg.Input(key = 'Buscar', enable_events=True, size=(30, 1)), sg.Button('Busqueda')],
                 [sg.Table(values=[], 
                           headings=['Cliente', 'Mes', 'Año', 'Monto'], 
                           justification='left', font=('Arial', 12), 
-                          num_rows=20, 
+                          num_rows=17, 
                           col_widths=[15,5 , 5, 20], 
                           auto_size_columns=False,
                           key='-TABLE-')],
@@ -167,8 +218,11 @@ def main():
     window = sg.Window('Ventana principal', layout_principal(), finalize=True)
    
     while True:
+         # Update the table with the latest data after each event
+        cursor.execute("SELECT cliente, mes, anio, SUM(monto) FROM sales GROUP BY cliente, mes, anio ORDER BY anio DESC, mes DESC")
+        rows = cursor.fetchall()
         event, values = window.read()
-       
+      
         if event == sg.WINDOW_CLOSED:
             break
         elif event == 'Agregar':
@@ -178,26 +232,37 @@ def main():
             monto = float(values['-MONTO-'])
             tipo_moneda = values['-TIPO_MONEDA-']
             
-            
             if tipo_moneda == "Dolar":
                 tipo_cambio = float(values['-TIPO_CAMBIO-']) 
                 monto = monto*tipo_cambio
                 crear_instancia(cliente, mes, anio, monto, tipo_moneda, tipo_cambio)
             else:
                 
-                crear_instancia(cliente, mes, anio, monto, tipo_moneda, tipo_cambio=None)
+                crear_instancia(cliente, mes, anio, monto, tipo_moneda, tipo_cambio=1)
         elif event == 'Borrar informacion':
             eliminar_info()
         elif event == 'Graf Anio':
             ver_graficas_anio()
         elif event == 'Graf Cliente':
             ver_graficas_cliente()
-    # Update the table with the latest data after each event
-        cursor.execute("SELECT cliente, mes, anio, SUM(monto) FROM pruebaventas GROUP BY cliente, mes, anio")
-        rows = cursor.fetchall()
-        window['-TABLE-'].update(values=rows)
-       
-    window.close()
+        elif event == 'Busqueda':
+            texto_buscar = values['Buscar'].strip().lower()  # Obtener el texto y eliminar espacios y convertir a minúsculas
 
+            # Obtener todos los datos de la tabla
+            cursor.execute("SELECT cliente, mes, anio, SUM(monto) FROM sales GROUP BY cliente, mes, anio ORDER BY anio DESC, mes DESC")
+            rows = cursor.fetchall()
+
+            # Filtrar los datos según el texto ingresado en 'Buscar'
+            rows_filtrados = [row for row in rows if texto_buscar in str(row).lower()]
+
+            # Convertir los montos a formato de dinero con dos decimales
+            rows_formatted = [(cliente, mes, anio, f"${monto:.2f}") for cliente, mes, anio, monto in rows_filtrados]
+
+            window['-TABLE-'].update(values=rows_formatted)
+        elif event == 'Act':
+            None
+        
+    window.close()
+    
 if __name__ == "__main__":
     main()
