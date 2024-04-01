@@ -180,7 +180,7 @@ def layout_principal():
     layout = [
         [          
             sg.Column([
-                [sg.Image(filename=str(Path('C:/Users/jesus/OneDrive/Documentos/Proyectos_propios/Kaio_1/CBH-Logo.png')), expand_x=True, expand_y=True )],
+                [sg.Image(filename=str(Path('C:/Users/jesus/OneDrive/Documentos/Proyectos_propios/Kaio_1/Logo.png')), expand_x=True, expand_y=True )],
                 [sg.Text("Nombre del cliente:")],
                 [sg.Input(key='-CLIENTE-')],
                 [sg.Text("Mes de las ventas:")],
